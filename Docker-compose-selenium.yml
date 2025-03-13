@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  selenium-hub:
+    image: selenium/hub:4.28.1
+    container_name: selenium-hub
+    ports:
+      - "4444:4444"
+      - "4442:4442"
+      - "4443:4443"
+    networks:
+      - rede-selenium
+
+  firefox-node-1:
+    image: selenium/node-firefox:4.28.1
+    depends_on:
+      - selenium-hub
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - SE_NODE_MAX_SESSIONS=2
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+    volumes:
+      - "C:\\Scraping\\TJMG:/home/seluser/Downloads/TJMG:rw"
+    shm_size: 2g
+    networks:
+      - rede-selenium
+
+  firefox-node-2:
+    image: selenium/node-firefox:4.28.1
+    depends_on:
+      - selenium-hub
+    environment:
+      - SE_EVENT_BUS_HOST=selenium-hub
+      - SE_EVENT_BUS_PUBLISH_PORT=4442
+      - SE_EVENT_BUS_SUBSCRIBE_PORT=4443
+      - SE_NODE_MAX_SESSIONS=2
+      - SE_NODE_OVERRIDE_MAX_SESSIONS=true
+    volumes:
+      - "C:\\Scraping\\TJMG:/home/seluser/Downloads/TJMG:rw"
+    networks:
+      - rede-selenium
+
+  bot-diario:
+    user: root
+    image: bot_diario:latest
+    container_name: bot-diario
+    restart: unless-stopped
+    working_dir: /app
+    env_file:
+      - docker.env
+    volumes:
+      - "C:\\Scraping\\TJMG:/home/seluser/Downloads/TJMG:rw"
+      - ./bot-diario:/app
+    ports:
+      - "8001:8000"
+    environment:
+      - SELENIUM_HOST=selenium-hub
+      - SELENIUM_NODE=firefox-node-1
+      - MONGO_URI=mongodb://server-mongo:27017/DIARIO_DB
+      - PYTHONPATH=/app
+      - TZ=America/Sao_Paulo
+    depends_on:
+      - selenium-hub
+    command: ["/opt/venv/bin/uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8001"]
+    networks:
+      - rede-selenium
+
+  bot-retroativo:
+    user: root
+    image: bot_retroativo:latest
+    container_name: bot-retroativo
+    restart: unless-stopped
+    depends_on:
+      - selenium-hub
+    working_dir: /app 
+    env_file:
+      - docker.env
+    environment:
+      - SELENIUM_HOST=selenium-hub
+      - SELENIUM_NODE=firefox-node-2 
+      - MONGO_URI=mongodb://server-mongo:27017/DIARIO_DB
+      - PYTHONPATH=/app
+      - TZ=America/Sao_Paulo
+    ports:
+      - "8000:8000"
+    volumes:
+      - "C:\\Scraping\\TJMG:/home/seluser/Downloads/TJMG:rw"
+      - ./bot-retroativo:/app
+    command: ["/opt/venv/bin/uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    networks:
+      - rede-selenium
+
+networks:
+  rede-selenium:
+    driver: bridge
